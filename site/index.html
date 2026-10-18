@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CNS 3205 - Git on Azure</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <header>
+      <p class="tag">CNS 3205 &middot; Server Administration</p>
+      <h1>Push to GitHub. Live on Azure.</h1>
+      <p class="lead">This page is served by Nginx from a Git clone on an Ubuntu VM in Azure.
+        Every push to <code>main</code> runs GitHub Actions, which SSHes in and runs
+        <code>deploy.sh</code>.</p>
+    </header>
+
+    <section class="card" id="live">
+      <h2>Currently deployed</h2>
+      <dl>
+        <dt>Commit</dt><dd id="commit">loading&hellip;</dd>
+        <dt>Message</dt><dd id="message">&ndash;</dd>
+        <dt>Author</dt><dd id="author">&ndash;</dd>
+        <dt>Deployed</dt><dd id="deployed">&ndash;</dd>
+        <dt>Server</dt><dd id="host">&ndash;</dd>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2>Recent deployments</h2>
+      <ol id="history"><li>loading&hellip;</li></ol>
+    </section>
+
+    <section class="card">
+      <h2>The team</h2>
+      <ul class="team">
+        <li>Brandon Kiplangat &middot; 193310</li>
+        <li>Ian Muyala &middot; 191616</li>
+        <li>Eric Muhika &middot; 191633</li>
+      </ul>
+    </section>
+
+    <footer>Edit <code>site/index.html</code>, commit, push &mdash; then refresh this page.</footer>
+  </main>
+
+  <script>
+    const set = (id, text) => { document.getElementById(id).textContent = text; };
+    const when = iso => new Date(iso).toLocaleString();
+
+    fetch("version.json", { cache: "no-store" })
+      .then(r => r.json())
+      .then(v => {
+        set("commit", v.commit);
+        set("message", v.message);
+        set("author", v.author);
+        set("deployed", when(v.deployed_at));
+        set("host", v.host);
+      })
+      .catch(() => set("commit", "not deployed by deploy.sh yet"));
+
+    fetch("history.json", { cache: "no-store" })
+      .then(r => r.json())
+      .then(rows => {
+        const list = document.getElementById("history");
+        list.replaceChildren(...rows.map(d => {
+          const li = document.createElement("li");
+          li.className = d.status;
+          li.textContent = `${d.commit}  ${d.message}  (${d.author}, ${when(d.deployed_at)}) ${d.status}`;
+          return li;
+        }));
+      })
+      .catch(() => set("history", "No history yet"));
+  </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# /etc/systemd/system/cns3205-autodeploy.service
+[Unit]
+Description=Pull and deploy the latest commit of cns3205-git-deploy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+Environment=HOME=/home/deploy
+ExecStart=/usr/bin/bash /var/www/cns3205/scripts/deploy.sh

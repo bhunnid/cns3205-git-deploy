@@ -1,0 +1,67 @@
+# .github/workflows/deploy.yml
+# On every push to main: check the code, then SSH into the Azure VM and run deploy.sh.
+# Pull requests only run the checks. "Run workflow" in the Actions tab deploys on demand.
+name: CI/CD - deploy to Azure VM
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two deployments at the same time; queue them instead.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Check site and scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Lint shell scripts (shellcheck)
+        run: shellcheck scripts/*.sh
+
+      - name: Validate HTML (htmlhint)
+        run: npx --yes htmlhint@1 "site/**/*.html"
+
+      - name: Required files exist
+        run: |
+          test -f site/index.html
+          test -f scripts/deploy.sh
+          grep -q 'id="app"' site/index.html   # deploy.sh's health check looks for this
+
+  deploy:
+    name: Deploy to Azure
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+    steps:
+      - name: Load the deploy key
+        run: |
+          install -m 700 -d ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts
+
+      - name: Run deploy.sh on the server
+        run: |
+          ssh -i ~/.ssh/deploy_key "$SERVER_USER@$SERVER_HOST" \
+            "bash /var/www/cns3205/scripts/deploy.sh"
+
+      - name: Smoke test from the internet
+        run: |
+          curl -fsS "http://$SERVER_HOST/version.json" | tee version.json
+          grep -q "\"commit\": \"${GITHUB_SHA::7}\"" version.json
+          echo "### Deployed \`${GITHUB_SHA::7}\` to http://$SERVER_HOST" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
