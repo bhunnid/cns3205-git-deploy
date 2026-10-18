@@ -55,7 +55,9 @@ healthy() {
 
 main() {
   exec 9>"$LOCK_FILE"
-  flock -n 9 || { log "Another deployment is already running - skipping"; exit 0; }
+  # Wait (up to 2 min) for any deployment in progress, then re-check: if it
+  # already deployed our commit we simply report "Already at ...".
+  flock -w 120 9 || { log "Timed out waiting for another deployment"; exit 1; }
 
   cd "$REPO_DIR"
   local previous target short
